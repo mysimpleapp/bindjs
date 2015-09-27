@@ -1,7 +1,7 @@
 # bindjs
 Tiny but powerful double-binding javascript library using Object.observe
 
-Minified, gzipped, this libraries only weights **1.5ko** !
+Minified, gzipped, this libraries only weights **1.7ko** !
 
 ## How to use
 

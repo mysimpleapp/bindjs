@@ -145,28 +145,48 @@ var listenDom = function(scopes, dom, evt, value, callback) {
 		}
 	}
 };
+// function to extract objects with details from binding expressions
+var regStartObj = /[_a-zA-Z]/;
+var regObj = /[_a-zA-Z0-9]/;
 var parseObjects = function(str) {
-	var regVar = /[a-zA-Z0-9][a-zA-Z0-9\.\[\]'"]*/g;
-	var regHead = /^([a-zA-Z0-9]+).*/;
-	var regNoAttr = /^([a-zA-Z0-9]+)$/;
-	var regAttr1 = /(.*)\.([a-zA-Z0-9]+)$/;
-	var regAttr2 = /(.*)\[([a-zA-Z0-9'"]+)\]$/;
-	var out = [], resVar, resHead, resAttr;
-	while (resVar = regVar.exec(str)) {
-		var idx = resVar.index;
-		var strVar = resVar[0];
-		var head = regHead.exec(strVar)[1];
-		var lst, att=null;
-		if(resAttr = regNoAttr.exec(strVar)) {
-			att = "'"+resAttr[1]+"'";
-		} else if(resAttr = regAttr1.exec(strVar)) {
-			lst = resAttr[1]; att = "'"+resAttr[2]+"'";
-		} else if(resAttr = regAttr2.exec(strVar)) {
-			lst = resAttr[1]; att = resAttr[2];
+	// loop through binding expression, char to char
+	var inString = false, objs = [], currentObj = null, openedObjs = [];
+	for(var i=0, len=str.length; i<len; ++i) {
+		var chr = str[i];
+		// check if we are in a string
+		if(!inString) { if(chr=="'" || chr=='"') { inString=chr; continue; } }
+		else { if(chr==inString) { inString=false; } continue; }
+		// check if we are at the beginning of an obj
+		if(currentObj===null && regStartObj.exec(chr)) { currentObj={idxs:[i]}; objs.push(currentObj); }
+		// check if we cross an index
+		if(currentObj!==null && !regObj.exec(chr)) {
+			currentObj.idxs.push(i);
+			// check if we open obj
+			if(chr=="[") openedObjs.push(currentObj);
+			// check if we are still in the obj
+			if(chr!=".") currentObj=null;
 		}
-		if(att) out.push({idx:idx, head:head, lst:lst, att:att})
+		// check if we close an obj
+		if(chr=="]") { currentObj = openedObjs.pop(); currentObj.idxs.push(i+1); }
 	}
-	return out;
+	// end of string check
+	if(currentObj!==null) currentObj.idxs.push(len);
+	// loop through objs and build details
+	for(var o=0, len=objs.length; o<len; ++o) {
+		var obj = objs[o], idxs=obj.idxs, nbIdx=idxs.length;
+		// object position in binding expression
+		obj.idx = idxs[0];
+		// object first var
+		obj.head = str.substring(idxs[0], idxs[1]);
+		// object last var
+		var att = str.substring(idxs[nbIdx-2], idxs[nbIdx-1]);
+		if(nbIdx==2) att = "'"+att+"'";
+		else if(att[0]==".") att = "'"+att.slice(1)+"'";
+		obj.att = att;
+		// object prt to listen
+		if(nbIdx>2) obj.lst = str.substring(idxs[0], idxs[nbIdx-2]);
+	}
+	return objs;
 };
 var parseFor = function(str) {
 	var reg = /(.*) in (.*)/;
