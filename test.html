@@ -10,8 +10,8 @@
 		<div>?{normal}</div>
 		<br>
 		<div><u>Test sub-object</u>:</div>
-		<input type="text" ?val="sub.val">
-		<div>?{sub.val}</div>
+		<input type="text" ?val="sub.sub.val">
+		<div>?{sub.sub.val}</div>
 		<br>
 		<div><u>Test specials</u>:</div>
 		<div ?if="show">Show</div>
@@ -29,7 +29,7 @@
 		<button ?onclick="nbClick+=1">Click</button>
 	</body>
 	<script>
-		var scope = {normal:"pepette", sub:{val:"petouille"}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0};
+		var scope = {normal:"pepette", sub:{sub:{val:"petouille"}}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0};
 		Bind(document.body, scope);
 		
 		scope.table.push('v3');

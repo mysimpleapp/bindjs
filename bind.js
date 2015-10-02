@@ -54,8 +54,10 @@ var bindAttrs = function(dom, scopes) {
 				listenObjs(scopes, value, dom, function(val, dom) { dom.style.display = val ? null : "none"; });
 			} else if(name=="?txt") {
 				listenObjs(scopes, value, dom, function(val, dom) { dom.textContent = toStr(val); });
+				if(dom.getAttribute("contenteditable")) listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.textContent; });
 			} else if(name=="?html") {
 				listenObjs(scopes, value, dom, function(val, dom) { dom.innerHTML = toStr(val); });
+				if(dom.getAttribute("contenteditable")) listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.innerHTML; });
 			} else if(name=="?val" || name=="?value") {
 				listenObjs(scopes, value, dom, function(val, dom) { val = toStr(val); if(dom.value!==val) dom.value=val; });
 				listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.value; });
@@ -113,9 +115,9 @@ var findAssociatedScope = function(scopes, obj) {
 			return s;
 	return null;
 };
-var listenObjs = function(scopes, value, dom, callback) {
-	var evalFun = evalAsFunction(scopes, value);
-	var objs = parseObjects(value);
+var listenObjs = function(scopes, expr, dom, callback) {
+	var evalFun = evalAsFunction(scopes, expr);
+	var objs = parseObjects(expr);
 	for(var o=0, len=objs.length; o<len; ++o) {
 		var obj = objs[o], numScope = findAssociatedScope(scopes, obj);
 		if(numScope!==null) {
