@@ -1,6 +1,17 @@
 <html>
 	<head>
+		<meta charset="utf-8">
 		<title>test</title>
+		<script>
+		// load polyfills (only if needed)
+		var loadScript = function(src) {
+			var script = document.createElement('script');
+			script.src = src;
+			document.head.appendChild(script);
+		}
+		if(!Object.observe) loadScript('../object.observe/dist/object-observe.js');
+		if(!Array.observe) loadScript('../array.observe/array-observe.js');
+		</script>
 		<script src="bind.min.js"></script>
 	</head>
 	<body>
@@ -29,11 +40,13 @@
 		<button ?onclick="nbClick+=1">Click</button>
 	</body>
 	<script>
-		var scope = {normal:"pepette", sub:{sub:{val:"petouille"}}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0};
-		Bind(document.body, scope);
-		
-		scope.table.push('v3');
-		scope.table.push('v4');
-		scope.table.splice(3,1);
+		window.onload = function() {
+			var scope = {normal:"pepette", sub:{sub:{val:"petouille"}}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0};
+			Bind(document.body, scope);
+			
+			scope.table.push('v3');
+			scope.table.push('v4');
+			scope.table.splice(3,1);
+		}
 	</script>
 </html>

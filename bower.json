@@ -1,0 +1,15 @@
+{
+  "name": "bindjs",
+  "version": "0.1.0",
+  "homepage": "https://github.com/mysimpleapp/bindjs",
+  "authors": [
+    "Nicolas CARREZ <nicolas.carrez@gmail.com>"
+  ],
+  "description": "Tiny but powerful double-binding javascript library using Object.observe",
+  "main": "bind.js",
+  "license": "MIT",
+  "dependencies": {
+    "object.observe": "~0.2.4",
+    "array.observe": "~0.0.1"
+  }
+}
