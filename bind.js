@@ -25,9 +25,9 @@ var bindAttrs = function(dom, scopes) {
 	var offset = 0;
 	// for attribute
 	if(dom.hasAttribute("?for")) {
-		var value = dom.getAttribute("?for");
+		var expr = dom.getAttribute("?for");
 		dom.removeAttribute("?for");
-		var forObss = parseFor(value), forArr = evalAsFunction(scopes, forObss.arr)(), forIdx = forObss.idx;
+		var forObss = parseFor(expr), forArr = evalAsFunction(scopes, forObss.arr)(), forIdx = forObss.idx;
 		var parentDom = dom.parentNode, endDom = dom.nextSibling, forObjs = [];
 		parentDom.removeChild(dom);
 		offset = -1 + forArr.length;
@@ -49,25 +49,37 @@ var bindAttrs = function(dom, scopes) {
 	} else {
 		// loop on attributes
 		for(var a=0, attrs=dom.attributes, n=attrs.length; a<n; ++a) {
-			var attr = attrs[a], name = attr.name, value = attr.value;
+			var attr = attrs[a], name = attr.name, expr = attr.value;
+			if(name.charAt(0)!=='?') continue;
+			var exprObjs = evalObjects(scopes, expr), exprFun = evalAsFunction(scopes, expr, exprObjs);
+			var objToDom = null, domToObj = null, domToObjEvt = null;
 			if(name=="?if") {
-				listenObjs(scopes, value, dom, function(val, dom) { dom.style.display = val ? null : "none"; });
+				objToDom = function(){ dom.style.display = exprFun() ? null : "none"; };
 			} else if(name=="?txt") {
-				listenObjs(scopes, value, dom, function(val, dom) { dom.textContent = toStr(val); });
-				if(dom.getAttribute("contenteditable")) listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.textContent; });
+				objToDom = function(){ dom.textContent = toStr(exprFun()); };
+				if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.textContent; });
+				domToObjEvt = "input";
 			} else if(name=="?html") {
-				listenObjs(scopes, value, dom, function(val, dom) { dom.innerHTML = toStr(val); });
-				if(dom.getAttribute("contenteditable")) listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.innerHTML; });
+				objToDom = function(){ dom.innerHTML = toStr(exprFun()); };
+				if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.innerHTML; });
+				domToObjEvt = "input";
 			} else if(name=="?val" || name=="?value") {
-				listenObjs(scopes, value, dom, function(val, dom) { val = toStr(val); if(dom.value!==val) dom.value=val; });
-				listenDom(scopes, dom, "input", value, function(dom, obj, attr) { obj[attr] = dom.value; });
+				objToDom = function(){ val = toStr(exprFun()); if(dom.value!==val) dom.value=val; };
+				domToObj = oneObjUpdater(exprObjs, function() { return dom.value; });
+				domToObjEvt = "input";
 			} else if(name.substring(0,3)==="?on") {
-				var name2 = name.substr(1);
-				dom[name2] = evalAsFunction(scopes, value);
-			} else if(name.charAt(0)==='?') {
-				var name2 = name.substr(1);
-				listenObjs(scopes, value, dom, (function(name2){ return function(val, dom){ dom.setAttribute(name2, val); }})(name2));
+				domToObj = exprFun;
+				domToObjEvt = name.substr(3);
+			} else {
+				objToDom = (function(attr){ return function(val){ dom.setAttribute(attr, exprFun()); } })(name.substr(1));
 			}
+			// listen obj & dom (if needed)
+			if(objToDom) listenObjs(exprObjs, objToDom);
+			if(domToObj) dom.addEventListener(domToObjEvt, domToObj);
+			// inital binding
+			var aloneObj = getObjectIfAlone(exprObjs);
+			if(domToObj && aloneObj && aloneObj.lst[aloneObj.att]===null) domToObj();
+			else if(objToDom) objToDom();
 		}
 		// recursive call to sons
 		for(var c=0, children=dom.children, len=children.length; c<len; ++c) {
@@ -77,8 +89,27 @@ var bindAttrs = function(dom, scopes) {
 	}
 	return offset;
 };
-var evalAsFunction = function(scopes, str) {
-	var objs = parseObjects(str);
+var oneObjUpdater = function(exprObjs, updater) {
+	var obj = getObjectIfAlone(exprObjs);
+	if(!obj) return null;
+	return function() {
+		obj.lst[obj.att] = updater();
+	}
+};
+var evalObjects = function(scopes, expr) {
+	var objs = parseObjects(expr);
+	for(var o=0, len=objs.length; o<len; ++o) {
+		var obj = objs[o];
+		var scopeNum = obj.scpN = findAssociatedScope(scopes, obj);
+		if(scopeNum!==null) {
+			var scope = obj.scp = scopes[scopeNum];
+			obj.lst = evalObject(scope, obj.lstS), obj.att = evalObject(null, obj.attS);
+		}
+	}
+	return objs;
+};
+var evalAsFunction = function(scopes, expr, exprObjs) {
+	if(!exprObjs) exprObjs = evalObjects(scopes, expr);
 	// define environment of function using scopes
 	var pre = "";
 	for(var s=0, len=scopes.length; s<len; ++s)  {
@@ -86,64 +117,51 @@ var evalAsFunction = function(scopes, str) {
 	}
 	// append scopes to variables
 	var offset = 0;
-	for(var o=0, len=objs.length; o<len; ++o) {
-		var obj = objs[o];
-		var numScope = findAssociatedScope(scopes, obj);
+	for(var o=0, len=exprObjs.length; o<len; ++o) {
+		var obj = exprObjs[o];
+		var numScope = obj.scpN;
 		if(numScope!==null) {
 			var scopeStr = "scope"+numScope+"."
 			var idx = obj.idx + offset;
-			str = str.slice(0, idx) + scopeStr + str.slice(idx);
+			expr = expr.slice(0, idx) + scopeStr + expr.slice(idx);
 			offset += scopeStr.length;
 		}
 	}
 	// prepend "return" for single instructions functions
-	if(str.indexOf(";")===-1) str = "return "+str;
+	if(expr.indexOf(";")===-1) expr = "return "+expr;
 	// create function
-	var funStr = pre+"var fun=function(){"+str+"}";
+	var funStr = pre+"var fun=function(){"+expr+"}";
 	eval(funStr);
 	return fun;
 };
-var evalObject = function(str, scope) {
+var evalObject = function(scope, str) {
 	// prepend scope is provided
 	if(scope) str = "scope" + (str ? "."+str : "");
 	return eval(str);
 };
 var findAssociatedScope = function(scopes, obj) {
-	var head = obj.head;
+	var headS = obj.headS;
 	for(var s in scopes)
-		if(head in scopes[s])
+		if(headS in scopes[s])
 			return s;
 	return null;
 };
-var listenObjs = function(scopes, expr, dom, callback) {
-	var evalFun = evalAsFunction(scopes, expr);
-	var objs = parseObjects(expr);
-	for(var o=0, len=objs.length; o<len; ++o) {
-		var obj = objs[o], numScope = findAssociatedScope(scopes, obj);
-		if(numScope!==null) {
-			var scope = scopes[numScope];
-			var lst = evalObject(obj.lst, scope);
-			var attr = evalObject(obj.att);
-			Object.observe(lst, (function(attr){ return function(changes){
+var getObjectIfAlone = function(exprObjs) {
+	// return first obj of expr if valid
+	return (exprObjs.length===1 && exprObjs[0].lst) ? exprObjs[0] : null;
+};
+var listenObjs = function(exprObjs, updater) {
+	for(var o=0, len=exprObjs.length; o<len; ++o) {
+		var obj = exprObjs[o];
+		if(obj.lst) {
+			Object.observe(obj.lst, (function(attr){ return function(changes){
 				for(var c=0, len=changes.length; c<len; ++c) {
 					if(changes[c].name===attr){
-						callback(evalFun(), dom);
+						updater();
 						return;
 					}
 				}
-			}})(attr));
-		}
-	}
-	callback(evalFun(), dom);
-};
-var listenDom = function(scopes, dom, evt, value, callback) {
-	var objs = parseObjects(value);
-	if(objs.length===1) {
-		var obj = objs[0], numScope = findAssociatedScope(scopes, obj);
-		if(numScope!==null) {
-			var scope = scopes[numScope];
-			var lst = evalObject(obj.lst, scope), attr = evalObject(obj.att);
-			dom.addEventListener(evt, function(){ callback(dom, lst, attr); });
+			}})(obj.att));
 		}
 	}
 };
@@ -179,14 +197,14 @@ var parseObjects = function(str) {
 		// object position in binding expression
 		obj.idx = idxs[0];
 		// object first var
-		obj.head = str.substring(idxs[0], idxs[1]);
+		obj.headS = str.substring(idxs[0], idxs[1]);
 		// object last var
-		var att = str.substring(idxs[nbIdx-2], idxs[nbIdx-1]);
-		if(nbIdx==2) att = "'"+att+"'";
-		else if(att[0]==".") att = "'"+att.slice(1)+"'";
-		obj.att = att;
-		// object prt to listen
-		if(nbIdx>2) obj.lst = str.substring(idxs[0], idxs[nbIdx-2]);
+		var attS = str.substring(idxs[nbIdx-2], idxs[nbIdx-1]);
+		if(nbIdx==2) attS = "'"+attS+"'";
+		else if(attS[0]==".") attS = "'"+attS.slice(1)+"'";
+		obj.attS = attS;
+		// object part to listen
+		if(nbIdx>2) obj.lstS = str.substring(idxs[0], idxs[nbIdx-2]);
 	}
 	return objs;
 };

@@ -37,11 +37,15 @@
 		<br>
 		<div><u>Test on</u>:</div>
 		<div>Nb click: ?{nbClick}</div>
-		<button ?onclick="nbClick+=1">Click</button>
+		<button ?onclick="nbClick+=1">Click</button><br>
+		<br>
+		<div><u>Initial binding from dom</u>:</div>
+		<input ?val="init" value="init from dom">
+		<div>Init value: ?{init}</div>
 	</body>
 	<script>
 		window.onload = function() {
-			var scope = {normal:"pepette", sub:{sub:{val:"petouille"}}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0};
+			var scope = {normal:"pepette", sub:{sub:{val:"petouille"}}, show:true, style:"color:blue", html:"pou<b>let</b>", cnt:1, table:['v0','v1','v2'], nbClick:0, init:null};
 			Bind(document.body, scope);
 			
 			scope.table.push('v3');
