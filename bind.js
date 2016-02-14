@@ -24,7 +24,7 @@ var toStr = function(val) {
 var bindAttrs = function(dom, scopes) {
 	var offset = 0;
 	// for attribute
-	if(dom.hasAttribute("?for")) {
+	if(dom.hasAttribute && dom.hasAttribute("?for")) {
 		var expr = dom.getAttribute("?for");
 		dom.removeAttribute("?for");
 		var forObss = parseFor(expr), forArr = evalAsFunction(scopes, forObss.arr)(), forIdx = forObss.idx;
@@ -47,39 +47,44 @@ var bindAttrs = function(dom, scopes) {
 			syncForDoms(scopes, forArr, forObjs, forIdx, removedObjs, dom, parentDom, endDom);
 		});
 	} else {
-		// loop on attributes
-		for(var a=0, attrs=dom.attributes, n=attrs.length; a<n; ++a) {
-			var attr = attrs[a], name = attr.name, expr = attr.value;
-			if(name.charAt(0)!=='?') continue;
-			var exprObjs = evalObjects(scopes, expr), exprFun = evalAsFunction(scopes, expr, exprObjs);
-			var objToDom = null, domToObj = null, domToObjEvt = null;
-			if(name=="?if") {
-				objToDom = function(){ dom.style.display = exprFun() ? null : "none"; };
-			} else if(name=="?txt") {
-				objToDom = function(){ dom.textContent = toStr(exprFun()); };
-				if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.textContent; });
-				domToObjEvt = "input";
-			} else if(name=="?html") {
-				objToDom = function(){ dom.innerHTML = toStr(exprFun()); };
-				if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.innerHTML; });
-				domToObjEvt = "input";
-			} else if(name=="?val" || name=="?value") {
-				objToDom = function(){ val = toStr(exprFun()); if(dom.value!==val) dom.value=val; };
-				domToObj = oneObjUpdater(exprObjs, function() { return dom.value; });
-				domToObjEvt = "input";
-			} else if(name.substring(0,3)==="?on") {
-				domToObj = exprFun;
-				domToObjEvt = name.substr(3);
-			} else {
-				objToDom = (function(attr){ return function(val){ dom.setAttribute(attr, exprFun()); } })(name.substr(1));
+		var attrs = dom.attributes;
+		if(attrs) {
+			// store all bindable attributes before any modification of the dom (that would add/remove some attrs)
+			var bindableAttrs = []
+			for(var a=0, len=attrs.length; a<len; ++a) if(attrs[a].name.charAt(0)=='?') bindableAttrs.push(attrs[a])
+			// loop on bindable attributes
+			for(var a=0, len=bindableAttrs.length; a<len; ++a) {
+				var attr = bindableAttrs[a], name = attr.name, expr = attr.value;
+				var exprObjs = evalObjects(scopes, expr), exprFun = evalAsFunction(scopes, expr, exprObjs);
+				var objToDom = null, domToObj = null, domToObjEvt = null;
+				if(name=="?if") {
+					objToDom = (function(exprFun){ return function(){ dom.style.display = exprFun() ? null : "none"; } })(exprFun);
+				} else if(name=="?txt") {
+					objToDom = (function(exprFun){ return function(){ var val = toStr(exprFun()); if(val != dom.textContent) dom.textContent = val; } })(exprFun);
+					if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.textContent; });
+					domToObjEvt = "input";
+				} else if(name=="?html") {
+					objToDom = (function(exprFun){ return function(){ var val = toStr(exprFun()); if(val != dom.innerHTML) dom.innerHTML = val; } })(exprFun);
+					if(dom.getAttribute("contenteditable")) domToObj = oneObjUpdater(exprObjs, function() { return dom.innerHTML; });
+					domToObjEvt = "input";
+				} else if(name=="?val" || name=="?value") {
+					objToDom = (function(exprFun){ return function(){ val = toStr(exprFun()); if(dom.value!==val) dom.value=val; } })(exprFun);
+					domToObj = oneObjUpdater(exprObjs, function() { return dom.value; });
+					domToObjEvt = "input";
+				} else if(name.substring(0,3)==="?on") {
+					domToObj = exprFun;
+					domToObjEvt = name.substr(3);
+				} else {
+					objToDom = (function(attr, exprFun){ return function(val){ dom.setAttribute(attr, exprFun()); } })(name.substr(1), exprFun);
+				}
+				// listen obj & dom (if needed)
+				if(objToDom) listenObjs(exprObjs, objToDom);
+				if(domToObj) dom.addEventListener(domToObjEvt, domToObj);
+				// inital binding
+				var aloneObj = getObjectIfAlone(exprObjs);
+				if(domToObj && aloneObj && aloneObj.lst[aloneObj.att]===null) domToObj();
+				else if(objToDom) objToDom();
 			}
-			// listen obj & dom (if needed)
-			if(objToDom) listenObjs(exprObjs, objToDom);
-			if(domToObj) dom.addEventListener(domToObjEvt, domToObj);
-			// inital binding
-			var aloneObj = getObjectIfAlone(exprObjs);
-			if(domToObj && aloneObj && aloneObj.lst[aloneObj.att]===null) domToObj();
-			else if(objToDom) objToDom();
 		}
 		// recursive call to sons
 		for(var c=0, children=dom.children, len=children.length; c<len; ++c) {
